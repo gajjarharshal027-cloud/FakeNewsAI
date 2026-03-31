@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TruthLens — Headline Verifier</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #18181f;
+    --border: rgba(255,255,255,0.07);
+    --accent: #e8ff47;
+    --accent2: #47d4ff;
+    --accent3: #b47dff;
+    --text: #f0f0f5;
+    --muted: #7070a0;
+    --true: #47ff9a;
+    --false: #ff4747;
+    --partial: #ffb347;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 0; opacity: 0.4;
+  }
+
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none; z-index: 0;
+  }
+
+  .container {
+    position: relative; z-index: 1;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 60px 24px 80px;
+  }
+
+  header {
+    margin-bottom: 48px;
+    text-align: center;
+    animation: fadeDown 0.6s ease both;
+  }
+
+  .logo-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(232,255,71,0.08);
+    border: 1px solid rgba(232,255,71,0.2);
+    border-radius: 100px; padding: 6px 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; letter-spacing: 0.12em;
+    color: var(--accent); text-transform: uppercase; margin-bottom: 20px;
+  }
+
+  .logo-badge::before {
+    content: ''; width: 6px; height: 6px;
+    background: var(--accent); border-radius: 50%;
+    box-shadow: 0 0 8px var(--accent); animation: pulse 2s infinite;
+  }
+
+  h1 {
+    font-family: 'Instrument Serif', serif;
+    font-size: clamp(42px, 8vw, 68px);
+    font-weight: 400; line-height: 1; letter-spacing: -0.02em; margin-bottom: 12px;
+  }
+
+  h1 em { color: var(--accent); font-style: italic; }
+
+  .subtitle {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px; color: var(--muted); letter-spacing: 0.04em;
+  }
+
+  /* Pipeline badges */
+  .pipeline {
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; margin-top: 16px; flex-wrap: wrap;
+  }
+
+  .pipe-badge {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 100px;
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+
+  .pipe-badge.news { background: rgba(232,255,71,0.08); border: 1px solid rgba(232,255,71,0.2); color: var(--accent); }
+  .pipe-badge.ai   { background: rgba(180,125,255,0.08); border: 1px solid rgba(180,125,255,0.2); color: var(--accent3); }
+  .pipe-arrow { color: var(--muted); font-size: 12px; }
+
+  /* Card */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 24px; margin-bottom: 14px;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .card-label {
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 10px;
+  }
+
+  /* Key row */
+  .key-row { display: flex; gap: 8px; }
+
+  .key-input {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+    color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px;
+    outline: none; transition: border-color 0.2s;
+  }
+
+  .key-input:focus { border-color: rgba(180,125,255,0.4); }
+  .key-input::placeholder { color: var(--muted); }
+
+  .save-btn {
+    background: rgba(180,125,255,0.15); border: 1px solid rgba(180,125,255,0.3);
+    color: var(--accent3); border-radius: 10px; padding: 12px 18px;
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 12px;
+    cursor: pointer; transition: all 0.2s; white-space: nowrap;
+  }
+
+  .save-btn:hover { background: rgba(180,125,255,0.25); }
+
+  .key-hint {
+    margin-top: 8px; font-family: 'DM Mono', monospace;
+    font-size: 10px; color: var(--muted);
+  }
+
+  .key-hint a { color: var(--accent3); text-decoration: none; }
+  .key-hint a:hover { text-decoration: underline; }
+
+  .key-saved {
+    display: none; align-items: center; gap: 6px;
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    color: var(--true); margin-top: 6px;
+  }
+
+  .key-saved.show { display: flex; }
+
+  /* Tabs */
+  .tabs {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 4px; margin-bottom: 14px;
+    animation: fadeUp 0.5s 0.1s ease both;
+  }
+
+  .tab-btn {
+    background: transparent; border: none; border-radius: 9px; padding: 11px;
+    color: var(--muted); font-family: 'Syne', sans-serif;
+    font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s;
+  }
+
+  .tab-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+
+  .panel { display: none; }
+  .panel.active { display: block; animation: fadeUp 0.3s ease both; }
+
+  /* Inputs */
+  .headline-input, .batch-input {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; color: var(--text);
+    font-family: 'Instrument Serif', serif; font-size: 16px; line-height: 1.5;
+    resize: vertical; outline: none; transition: border-color 0.2s; margin-bottom: 12px;
+  }
+
+  .batch-input { font-family: 'DM Mono', monospace; font-size: 12px; line-height: 1.8; min-height: 150px; }
+  .headline-input { min-height: 85px; }
+  .headline-input:focus, .batch-input:focus { border-color: rgba(232,255,71,0.4); }
+  .headline-input::placeholder, .batch-input::placeholder { color: var(--muted); font-style: italic; font-family: 'Syne', sans-serif; font-size: 13px; }
+
+  .verify-btn {
+    width: 100%; background: linear-gradient(135deg, #e8ff47, #b8d400);
+    color: #0a0a0f; border: none; border-radius: 10px; padding: 15px;
+    font-family: 'Syne', sans-serif; font-weight: 800; font-size: 14px;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    cursor: pointer; transition: all 0.2s;
+  }
+
+  .verify-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(232,255,71,0.3); }
+  .verify-btn:active { transform: translateY(0); }
+  .verify-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  /* Loading */
+  .loading {
+    display: none; align-items: center; gap: 12px; padding: 18px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; margin-top: 12px;
+    font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted);
+  }
+
+  .loading.show { display: flex; }
+
+  .spinner {
+    width: 16px; height: 16px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite; flex-shrink: 0;
+  }
+
+  /* Source tag */
+  .source-tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: 'DM Mono', monospace; font-size: 9px;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 100px; margin-left: auto;
+  }
+
+  .source-tag.newsapi { background: rgba(232,255,71,0.1); color: var(--accent); border: 1px solid rgba(232,255,71,0.2); }
+  .source-tag.claude  { background: rgba(180,125,255,0.1); color: var(--accent3); border: 1px solid rgba(180,125,255,0.2); }
+
+  /* Result */
+  .result {
+    display: none; margin-top: 12px; border-radius: 12px;
+    overflow: hidden; border: 1px solid var(--border);
+    animation: resultReveal 0.4s ease both;
+  }
+
+  .result.show { display: block; }
+
+  .result-header { display: flex; align-items: center; gap: 12px; padding: 16px 18px; }
+
+  .result.TRUE .result-header    { background: rgba(71,255,154,0.08); border-bottom: 1px solid rgba(71,255,154,0.15); }
+  .result.FALSE .result-header   { background: rgba(255,71,71,0.08);  border-bottom: 1px solid rgba(255,71,71,0.15); }
+  .result.PARTIAL .result-header { background: rgba(255,179,71,0.08); border-bottom: 1px solid rgba(255,179,71,0.15); }
+  .result.UNVERIFIABLE .result-header { background: rgba(112,112,160,0.08); border-bottom: 1px solid rgba(112,112,160,0.2); }
+
+  .verdict-icon {
+    width: 34px; height: 34px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; flex-shrink: 0;
+  }
+
+  .result.TRUE .verdict-icon    { background: rgba(71,255,154,0.15); color: var(--true); }
+  .result.FALSE .verdict-icon   { background: rgba(255,71,71,0.15);  color: var(--false); }
+  .result.PARTIAL .verdict-icon { background: rgba(255,179,71,0.15); color: var(--partial); }
+  .result.UNVERIFIABLE .verdict-icon { background: rgba(112,112,160,0.1); color: var(--muted); }
+
+  .verdict-label {
+    font-family: 'Syne', sans-serif; font-weight: 800;
+    font-size: 16px; letter-spacing: 0.04em;
+  }
+
+  .result.TRUE .verdict-label    { color: var(--true); }
+  .result.FALSE .verdict-label   { color: var(--false); }
+  .result.PARTIAL .verdict-label { color: var(--partial); }
+  .result.UNVERIFIABLE .verdict-label { color: var(--muted); }
+
+  .confidence-badge {
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    padding: 3px 9px; border-radius: 100px;
+    background: rgba(255,255,255,0.05); color: var(--muted);
+  }
+
+  .result-body { padding: 18px; background: var(--surface); }
+
+  .result-section { margin-bottom: 16px; }
+  .result-section:last-child { margin-bottom: 0; }
+
+  .result-section-label {
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 8px;
+  }
+
+  /* Claude explanation box */
+  .claude-explanation {
+    font-size: 14px; line-height: 1.7;
+    color: rgba(240,240,245,0.85);
+    padding: 14px; background: rgba(180,125,255,0.05);
+    border: 1px solid rgba(180,125,255,0.12); border-radius: 8px;
+  }
+
+  .claim-box {
+    font-family: 'Instrument Serif', serif; font-size: 14px;
+    line-height: 1.5; color: rgba(240,240,245,0.7);
+    padding: 12px 14px; background: var(--surface2);
+    border-radius: 8px; border: 1px solid var(--border);
+    font-style: italic;
+  }
+
+  /* Articles */
+  .articles-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .article-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px;
+    text-decoration: none; display: block; transition: border-color 0.2s;
+  }
+
+  .article-card:hover { border-color: rgba(71,212,255,0.3); }
+
+  .article-source {
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    color: var(--accent2); letter-spacing: 0.08em;
+    text-transform: uppercase; margin-bottom: 4px;
+  }
+
+  .article-title {
+    font-family: 'Instrument Serif', serif; font-size: 14px;
+    line-height: 1.4; color: var(--text);
+  }
+
+  .article-date {
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    color: var(--muted); margin-top: 4px;
+  }
+
+  /* Batch */
+  .batch-results { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+
+  .batch-item {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+    display: flex; align-items: flex-start; gap: 10px;
+    animation: fadeUp 0.3s ease both;
+  }
+
+  .batch-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    margin-top: 4px; flex-shrink: 0;
+  }
+
+  .batch-item.TRUE .batch-dot    { background: var(--true);    box-shadow: 0 0 8px rgba(71,255,154,0.5); }
+  .batch-item.FALSE .batch-dot   { background: var(--false);   box-shadow: 0 0 8px rgba(255,71,71,0.5); }
+  .batch-item.PARTIAL .batch-dot { background: var(--partial); box-shadow: 0 0 8px rgba(255,179,71,0.5); }
+  .batch-item.UNVERIFIABLE .batch-dot { background: var(--muted); }
+  .batch-item.LOADING .batch-dot { background: var(--muted); animation: pulse 1s infinite; }
+
+  .batch-headline {
+    font-family: 'Instrument Serif', serif; font-size: 13px;
+    line-height: 1.4; color: var(--text); flex: 1;
+  }
+
+  .batch-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+
+  .batch-verdict {
+    font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500;
+    letter-spacing: 0.1em; padding: 3px 8px; border-radius: 100px;
+    white-space: nowrap;
+  }
+
+  .batch-item.TRUE .batch-verdict    { background: rgba(71,255,154,0.1); color: var(--true); }
+  .batch-item.FALSE .batch-verdict   { background: rgba(255,71,71,0.1);  color: var(--false); }
+  .batch-item.PARTIAL .batch-verdict { background: rgba(255,179,71,0.1); color: var(--partial); }
+  .batch-item.UNVERIFIABLE .batch-verdict { background: rgba(112,112,160,0.1); color: var(--muted); }
+  .batch-item.LOADING .batch-verdict { background: rgba(112,112,160,0.1); color: var(--muted); }
+
+  .batch-src {
+    font-family: 'DM Mono', monospace; font-size: 9px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+
+  .batch-src.newsapi { color: var(--accent); }
+  .batch-src.claude  { color: var(--accent3); }
+
+  /* Error */
+  .error-box {
+    display: none; background: rgba(255,71,71,0.08);
+    border: 1px solid rgba(255,71,71,0.2); border-radius: 10px;
+    padding: 12px 16px; margin-top: 12px;
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    color: var(--false); line-height: 1.6;
+  }
+
+  .error-box.show { display: block; }
+
+  @keyframes fadeDown { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes fadeUp   { from { opacity:0; transform:translateY(16px);  } to { opacity:1; transform:translateY(0); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+  @keyframes resultReveal { from { opacity:0; transform:scale(0.97); } to { opacity:1; transform:scale(1); } }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="logo-badge">Dual-Engine Verification</div>
+    <h1>Truth<em>Lens</em></h1>
+    <p class="subtitle">NewsAPI for recent news · Groq AI (FREE) for everything else</p>
+    <div class="pipeline">
+      <div class="pipe-badge news">① NewsAPI Search</div>
+      <span class="pipe-arrow">→ if nothing found →</span>
+      <div class="pipe-badge ai">② Groq AI (FREE)</div>
+    </div>
+  </header>
+
+  <!-- Claude API Key -->
+  <div class="card" style="animation-delay:0.05s">
+    <div class="card-label">Groq API Key (FREE — for AI fallback)</div>
+    <div class="key-row">
+      <input type="password" class="key-input" id="groqKey" placeholder="gsk_…" />
+      <button class="save-btn" onclick="saveKey()">Save</button>
+    </div>
+    <div class="key-saved" id="keySaved">✓ Groq key saved</div>
+    <p class="key-hint">Get a free key at <a href="https://console.groq.com" target="_blank">console.groq.com</a> — used only when NewsAPI finds nothing</p>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('single', this)">Single headline</button>
+    <button class="tab-btn" onclick="switchTab('batch', this)">Batch check</button>
+  </div>
+
+  <!-- Single Panel -->
+  <div class="panel active" id="panel-single">
+    <div class="card" style="animation-delay:0.1s">
+      <div class="card-label">Enter a headline to verify</div>
+      <textarea class="headline-input" id="headlineInput" placeholder="Paste any news headline here…" rows="3"></textarea>
+      <button class="verify-btn" id="verifyBtn" onclick="verifySingle()">⚡ Verify Headline</button>
+
+      <div class="loading" id="singleLoading">
+        <div class="spinner"></div>
+        <span id="loadingText">Searching NewsAPI…</span>
+      </div>
+      <div class="error-box" id="singleError"></div>
+
+      <div class="result" id="singleResult">
+        <div class="result-header">
+          <div class="verdict-icon" id="resultIcon"></div>
+          <div class="verdict-label" id="resultVerdict"></div>
+          <div class="confidence-badge" id="resultConfidence"></div>
+          <div class="source-tag" id="resultSource"></div>
+        </div>
+        <div class="result-body" id="resultBody"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Batch Panel -->
+  <div class="panel" id="panel-batch">
+    <div class="card" style="animation-delay:0.1s">
+      <div class="card-label">Enter headlines (one per line)</div>
+      <textarea class="batch-input" id="batchInput" placeholder="Headline one&#10;Headline two&#10;Headline three…"></textarea>
+      <button class="verify-btn" id="batchBtn" onclick="verifyBatch()">⚡ Verify All Headlines</button>
+      <div class="error-box" id="batchError"></div>
+      <div class="batch-results" id="batchResults"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let groqKey = '';
+
+  const icons  = { TRUE: '✓', FALSE: '✗', PARTIAL: '~', UNVERIFIABLE: '?' };
+  const labels = { TRUE: 'VERIFIED', FALSE: 'FALSE / FAKE', PARTIAL: 'PARTIALLY TRUE', UNVERIFIABLE: 'UNVERIFIABLE' };
+
+  function saveKey() {
+    const val = document.getElementById('groqKey').value.trim();
+    if (!val.startsWith('gsk_')) { alert('Please enter a valid Groq key starting with gsk_'); return; }
+    groqKey = val;
+    document.getElementById('keySaved').classList.add('show');
+    setTimeout(() => document.getElementById('keySaved').classList.remove('show'), 3000);
+  }
+
+  function switchTab(tab, el) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('panel-' + tab).classList.add('active');
+  }
+
+  function formatDate(iso) {
+    if (!iso) return '';
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  async function fetchVerify(headline) {
+    const key = groqKey || document.getElementById('groqKey').value.trim();
+    let url = `/api/verify?headline=${encodeURIComponent(headline)}`;
+    if (key) url += `&anthropicKey=${encodeURIComponent(key)}`;
+    const res = await fetch(url);
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error || `Server error ${res.status}`); }
+    return res.json();
+  }
+
+  function buildResultBody(data) {
+    let html = '';
+
+    if (data.source === 'groq') {
+      // Claude AI result
+      if (data.explanation) {
+        html += `<div class="result-section">
+          <div class="result-section-label">Groq AI Analysis</div>
+          <div class="claude-explanation">${data.explanation}</div>
+        </div>`;
+      }
+      if (data.keyClaim) {
+        html += `<div class="result-section">
+          <div class="result-section-label">Key Claim</div>
+          <div class="claim-box">${data.keyClaim}</div>
+        </div>`;
+      }
+    } else {
+      // NewsAPI result
+      if (data.articles && data.articles.length > 0) {
+        const cards = data.articles.map(a => `
+          <a class="article-card" href="${a.url}" target="_blank" rel="noopener">
+            <div class="article-source">${a.source || 'Unknown'}</div>
+            <div class="article-title">${a.title || 'No title'}</div>
+            <div class="article-date">${formatDate(a.publishedAt)}</div>
+          </a>`).join('');
+        html += `<div class="result-section">
+          <div class="result-section-label">Related articles (${data.totalResults} total)</div>
+          <div class="articles-list">${cards}</div>
+        </div>`;
+      }
+    }
+    return html;
+  }
+
+  async function verifySingle() {
+    const headline = document.getElementById('headlineInput').value.trim();
+    if (!headline) { alert('Please enter a headline.'); return; }
+
+    const btn      = document.getElementById('verifyBtn');
+    const loading  = document.getElementById('singleLoading');
+    const errorBox = document.getElementById('singleError');
+    const result   = document.getElementById('singleResult');
+
+    btn.disabled = true;
+    loading.classList.add('show');
+    errorBox.classList.remove('show');
+    result.classList.remove('show');
+
+    const msgs = ['Searching NewsAPI…', 'Scanning articles…', 'Consulting Claude AI…', 'Finalizing verdict…'];
+    let mi = 0;
+    const ticker = setInterval(() => {
+      document.getElementById('loadingText').textContent = msgs[++mi % msgs.length];
+    }, 1800);
+
+    try {
+      const data = await fetchVerify(headline);
+      clearInterval(ticker);
+
+      result.className = 'result show ' + data.verdict;
+      document.getElementById('resultIcon').textContent = icons[data.verdict] || '?';
+      document.getElementById('resultVerdict').textContent = labels[data.verdict] || data.verdict;
+      document.getElementById('resultConfidence').textContent = data.confidence + ' confidence';
+
+      const srcEl = document.getElementById('resultSource');
+      if (data.source === 'groq') {
+        srcEl.textContent = '✦ Groq AI';
+        srcEl.className = 'source-tag groq';
+      } else {
+        srcEl.textContent = '⚡ NewsAPI';
+        srcEl.className = 'source-tag newsapi';
+      }
+
+      document.getElementById('resultBody').innerHTML = buildResultBody(data);
+
+    } catch (e) {
+      clearInterval(ticker);
+      errorBox.textContent = '⚠ ' + e.message;
+      errorBox.classList.add('show');
+    } finally {
+      loading.classList.remove('show');
+      btn.disabled = false;
+    }
+  }
+
+  async function verifyBatch() {
+    const lines = document.getElementById('batchInput').value.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!lines.length) { alert('Please enter at least one headline.'); return; }
+
+    const btn       = document.getElementById('batchBtn');
+    const errorBox  = document.getElementById('batchError');
+    const container = document.getElementById('batchResults');
+
+    btn.disabled = true;
+    errorBox.classList.remove('show');
+    container.innerHTML = '';
+
+    const items = lines.map((headline, i) => {
+      const div = document.createElement('div');
+      div.className = 'batch-item LOADING';
+      div.style.animationDelay = (i * 0.05) + 's';
+      div.innerHTML = `
+        <div class="batch-dot"></div>
+        <div class="batch-headline">${headline}</div>
+        <div class="batch-right">
+          <div class="batch-verdict">Checking…</div>
+          <div class="batch-src"></div>
+        </div>`;
+      container.appendChild(div);
+      return div;
+    });
+
+    for (let i = 0; i < lines.length; i++) {
+      try {
+        const data = await fetchVerify(lines[i]);
+        items[i].className = 'batch-item ' + data.verdict;
+        items[i].querySelector('.batch-verdict').textContent = labels[data.verdict] || data.verdict;
+        const srcEl = items[i].querySelector('.batch-src');
+        if (data.source === 'groq') { srcEl.textContent = '✦ Groq AI'; srcEl.className = 'batch-src groq'; }
+        else { srcEl.textContent = '⚡ NewsAPI'; srcEl.className = 'batch-src newsapi'; }
+      } catch (e) {
+        items[i].className = 'batch-item UNVERIFIABLE';
+        items[i].querySelector('.batch-verdict').textContent = 'Error';
+      }
+    }
+
+    btn.disabled = false;
+  }
+
+  document.getElementById('headlineInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); verifySingle(); }
+  });
+</script>
+</body>
+</html>
